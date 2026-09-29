@@ -3,9 +3,13 @@ const express = require('express');
 const cors = require('cors');
 const twilio = require('twilio');
 const sqlite3 = require('sqlite3').verbose();
+const https = require('https');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// Webhook do Zapier para WhatsApp
+const ZAPIER_WEBHOOK = "https://hooks.zapier.com/hooks/catch/8574170/4mdpmc5/";
 
 // Middleware
 app.use(cors());
@@ -36,6 +40,47 @@ const twilioClient = twilio(
   process.env.TWILIO_ACCOUNT_SID,
   process.env.TWILIO_AUTH_TOKEN
 );
+
+// Função para enviar para Zapier
+async function enviarZapier(dados) {
+  return new Promise((resolve, reject) => {
+    const payload = JSON.stringify({
+      nome: dados.nome,
+      email: dados.email,
+      telefone: dados.telefone,
+      profissao: dados.profissao,
+      respostas: dados.respostas
+    });
+
+    const options = {
+      hostname: 'hooks.zapier.com',
+      path: '/hooks/catch/8574170/4mdpmc5/',
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': payload.length
+      }
+    };
+
+    const req = https.request(options, (res) => {
+      if (res.statusCode === 200 || res.statusCode === 201) {
+        console.log('✅ Webhook Zapier enviado com sucesso');
+        resolve(true);
+      } else {
+        console.error(`⚠️ Zapier respondeu com status ${res.statusCode}`);
+        resolve(false);
+      }
+    });
+
+    req.on('error', (error) => {
+      console.error('❌ Erro ao enviar para Zapier:', error.message);
+      resolve(false);
+    });
+
+    req.write(payload);
+    req.end();
+  });
+}
 
 // Função para enviar WhatsApp
 async function enviarWhatsApp(dados) {
@@ -109,7 +154,16 @@ app.post('/api/leads', async (req, res) => {
 
         console.log(`✅ Lead salvo: ${nome}`);
 
-        // Enviar WhatsApp
+        // Enviar para Zapier (WhatsApp)
+        await enviarZapier({
+          nome,
+          email,
+          telefone,
+          profissao,
+          respostas
+        });
+
+        // Enviar WhatsApp via Twilio (como backup)
         await enviarWhatsApp({
           nome,
           email,
