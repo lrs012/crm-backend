@@ -4,12 +4,22 @@ const cors = require('cors');
 const twilio = require('twilio');
 const sqlite3 = require('sqlite3').verbose();
 const https = require('https');
+const nodemailer = require('nodemailer');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Webhook do Zapier para WhatsApp
 const ZAPIER_WEBHOOK = "https://hooks.zapier.com/hooks/catch/8574170/4mdpmc5/";
+
+// Configurar Nodemailer com Gmail
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: process.env.GMAIL_EMAIL || 'lucas.renosto012@gmail.com',
+    pass: process.env.GMAIL_PASSWORD || 'mcrp hpat phki teui'
+  }
+});
 
 // Middleware
 app.use(cors());
@@ -80,6 +90,41 @@ async function enviarZapier(dados) {
     req.write(payload);
     req.end();
   });
+}
+
+// Função para enviar Email
+async function enviarEmail(dados) {
+  try {
+    const mensagem = `
+🎯 NOVO LEAD QUALIFICADO - GRUPO RZ
+
+📌 INFORMAÇÕES PESSOAIS
+Nome: ${dados.nome}
+Email: ${dados.email}
+Telefone: ${dados.telefone}
+Profissão: ${dados.profissao}
+
+📋 RESPOSTAS DO QUIZ:
+${dados.respostas}
+
+---
+Dashboard: https://dashboard-deploy-l0rd4z2s8-lrs012.vercel.app
+Acesso: admin / admin123
+    `.trim();
+
+    await transporter.sendMail({
+      from: process.env.GMAIL_EMAIL || 'lucas.renosto012@gmail.com',
+      to: process.env.GMAIL_EMAIL || 'lucas.renosto012@gmail.com',
+      subject: `🎯 Novo Lead Qualificado - ${dados.nome}`,
+      text: mensagem
+    });
+
+    console.log('✅ Email enviado com sucesso');
+    return true;
+  } catch (error) {
+    console.error('❌ Erro ao enviar email:', error.message);
+    return false;
+  }
 }
 
 // Função para enviar WhatsApp
@@ -153,6 +198,15 @@ app.post('/api/leads', async (req, res) => {
         }
 
         console.log(`✅ Lead salvo: ${nome}`);
+
+        // Enviar Email
+        await enviarEmail({
+          nome,
+          email,
+          telefone,
+          profissao,
+          respostas
+        });
 
         // Enviar para Zapier (WhatsApp)
         await enviarZapier({
