@@ -2,8 +2,7 @@
   "name": "crm-backend-vercel",
   "version": "1.0.0",
   "scripts": {
-    "dev": "vercel dev",
-    "build": "echo 'No build needed for Vercel Functions'"
+    "dev": "vercel dev"
   },
   "dependencies": {
     "nodemailer": "^6.9.7"
