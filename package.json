@@ -1,23 +1,11 @@
 {
-  "name": "crm-backend",
+  "name": "crm-backend-vercel",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
   "scripts": {
-    "start": "node server.js",
-    "dev": "node server.js"
+    "dev": "vercel dev",
+    "build": "echo 'No build needed for Vercel Functions'"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "type": "commonjs",
   "dependencies": {
-    "cors": "^2.8.6",
-    "dotenv": "^18.0.4",
-    "express": "^5.2.1",
-    "googleapis": "^182.0.0",
-    "nodemailer": "^6.9.7",
-    "sqlite3": "^6.0.1",
-    "twilio": "^6.1.2"
+    "nodemailer": "^6.9.7"
   }
 }
