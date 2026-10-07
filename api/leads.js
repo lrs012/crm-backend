@@ -8,6 +8,78 @@ const transporter = nodemailer.createTransport({
   }
 });
 
+const crypto = require('crypto');
+
+const sha256 = (valor) => crypto.createHash('sha256').update(valor).digest('hex');
+
+function normalizarTelefone(telefone) {
+  const digitos = String(telefone || '').replace(/\D/g, '');
+  if (!digitos) return null;
+  return digitos.startsWith('55') && digitos.length >= 12 ? digitos : `55${digitos}`;
+}
+
+async function enviarMetaCapi({ lead, nome, email, telefone, eventId, fbp, fbc, sourceUrl }, req) {
+  const token = process.env.META_CAPI_TOKEN;
+  if (!token) {
+    console.log('⚠️ META_CAPI_TOKEN ausente: evento Meta não enviado');
+    return false;
+  }
+
+  try {
+    const datasetId = process.env.META_DATASET_ID || '2584671361927257';
+    const versao = process.env.META_GRAPH_VERSION || 'v25.0';
+    const partes = String(nome).trim().toLowerCase().split(/\s+/);
+    const ip = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim();
+
+    const userData = {
+      em: [sha256(String(email).trim().toLowerCase())],
+      fn: [sha256(partes[0])],
+      ln: partes.length > 1 ? [sha256(partes[partes.length - 1])] : undefined,
+      country: [sha256('br')],
+      external_id: [sha256(String(lead.id))],
+      client_user_agent: req.headers['user-agent'] || undefined,
+      client_ip_address: ip || undefined,
+      fbp: fbp || undefined,
+      fbc: fbc || undefined
+    };
+    const ph = normalizarTelefone(telefone);
+    if (ph) userData.ph = [sha256(ph)];
+
+    const payload = {
+      access_token: token,
+      data: [{
+        event_name: 'Lead',
+        event_time: Math.floor(Date.now() / 1000),
+        event_id: eventId || crypto.randomUUID(),
+        action_source: 'website',
+        event_source_url: /^https?:\/\//.test(sourceUrl || '') ? sourceUrl : undefined,
+        user_data: userData
+      }]
+    };
+    if (process.env.META_TEST_EVENT_CODE) {
+      payload.test_event_code = process.env.META_TEST_EVENT_CODE;
+    }
+
+    const resposta = await fetch(`https://graph.facebook.com/${versao}/${datasetId}/events`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(8000)
+    });
+    const corpo = await resposta.json().catch(() => ({}));
+
+    if (!resposta.ok) {
+      console.error('❌ Meta CAPI erro:', resposta.status, JSON.stringify(corpo.error || corpo));
+      return false;
+    }
+    console.log('✅ Meta CAPI: eventos recebidos =', corpo.events_received);
+    return true;
+  } catch (error) {
+    console.error('❌ Meta CAPI falhou:', error.message);
+    return false;
+  }
+}
+
 function supabase(path, options = {}) {
   const base = (process.env.SUPABASE_URL || '').replace(/\/(rest\/v1)?\/?$/, '');
   return fetch(`${base}/rest/v1/${path}`, {
@@ -65,7 +137,7 @@ module.exports = async (req, res) => {
 
   try {
     if (req.method === 'POST') {
-      const { nome, email, telefone, profissao, q1, q2, q3, q4, q5, q6, q7, q8, q9, q10, q11, q12, q13, q14, q15 } = req.body;
+      const { nome, email, telefone, profissao, q1, q2, q3, q4, q5, q6, q7, q8, q9, q10, q11, q12, q13, q14, q15, event_id, fbp, fbc, event_source_url } = req.body;
 
       if (!nome || !email || !telefone) {
         return res.status(400).json({ error: 'Nome, email e telefone são obrigatórios' });
@@ -110,7 +182,19 @@ module.exports = async (req, res) => {
       const [lead] = await insert.json();
       console.log(`✅ Lead salvo: ${nome}`);
 
-      await enviarEmail({ nome, email, telefone, profissao, respostas });
+      await Promise.allSettled([
+        enviarEmail({ nome, email, telefone, profissao, respostas }),
+        enviarMetaCapi({
+          lead,
+          nome,
+          email,
+          telefone,
+          eventId: event_id,
+          fbp,
+          fbc,
+          sourceUrl: event_source_url
+        }, req)
+      ]);
 
       return res.json({
         success: true,
