@@ -1,7 +1,5 @@
 const nodemailer = require('nodemailer');
 
-let leads = [];
-
 const transporter = nodemailer.createTransport({
   service: 'gmail',
   auth: {
@@ -9,6 +7,19 @@ const transporter = nodemailer.createTransport({
     pass: process.env.GMAIL_PASSWORD
   }
 });
+
+function supabase(path, options = {}) {
+  const base = (process.env.SUPABASE_URL || '').replace(/\/(rest\/v1)?\/?$/, '');
+  return fetch(`${base}/rest/v1/${path}`, {
+    ...options,
+    headers: {
+      apikey: process.env.SUPABASE_SERVICE_KEY,
+      Authorization: `Bearer ${process.env.SUPABASE_SERVICE_KEY}`,
+      'Content-Type': 'application/json',
+      ...options.headers
+    }
+  });
+}
 
 async function enviarEmail(dados) {
   try {
@@ -25,8 +36,7 @@ Profissão: ${dados.profissao}
 ${dados.respostas}
 
 ---
-Dashboard: https://dashboard-deploy-l0rd4z2s8-lrs012.vercel.app
-Acesso: admin / admin123
+Dashboard: https://dashboard-deploy-zeta-drab.vercel.app
     `.trim();
 
     await transporter.sendMail({
@@ -47,7 +57,7 @@ Acesso: admin / admin123
 module.exports = async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-dashboard-password');
 
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
@@ -79,27 +89,28 @@ module.exports = async (req, res) => {
 15. ${q15 || '-'}
       `.trim();
 
-      const lead = {
-        id: leads.length + 1,
-        nome,
-        email,
-        telefone,
-        profissao,
-        responses: respostas,
-        ending_type: 'qualified',
-        created_at: new Date().toISOString()
-      };
+      const insert = await supabase('leads', {
+        method: 'POST',
+        headers: { Prefer: 'return=representation' },
+        body: JSON.stringify({
+          nome,
+          email,
+          telefone,
+          profissao,
+          responses: respostas,
+          ending_type: 'qualified'
+        })
+      });
 
-      leads.push(lead);
+      if (!insert.ok) {
+        console.error('Erro ao salvar lead:', insert.status, await insert.text());
+        return res.status(500).json({ error: 'Erro ao salvar lead' });
+      }
+
+      const [lead] = await insert.json();
       console.log(`✅ Lead salvo: ${nome}`);
 
-      await enviarEmail({
-        nome,
-        email,
-        telefone,
-        profissao,
-        respostas
-      });
+      await enviarEmail({ nome, email, telefone, profissao, respostas });
 
       return res.json({
         success: true,
@@ -109,13 +120,24 @@ module.exports = async (req, res) => {
     }
 
     if (req.method === 'GET') {
-      return res.json(leads);
+      if (
+        !process.env.DASHBOARD_PASSWORD ||
+        req.headers['x-dashboard-password'] !== process.env.DASHBOARD_PASSWORD
+      ) {
+        return res.status(401).json({ error: 'Não autorizado' });
+      }
+
+      const list = await supabase('leads?select=*&order=created_at.desc');
+      if (!list.ok) {
+        console.error('Erro ao listar leads:', list.status, await list.text());
+        return res.status(500).json({ error: 'Erro ao buscar leads' });
+      }
+      return res.json(await list.json());
     }
 
     return res.status(405).json({ error: 'Método não permitido' });
-
   } catch (error) {
     console.error('Erro:', error);
-    return res.status(500).json({ error: error.message });
+    return res.status(500).json({ error: 'Erro interno do servidor' });
   }
 };
