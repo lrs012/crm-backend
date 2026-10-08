@@ -1,4 +1,5 @@
 const nodemailer = require('nodemailer');
+const { calcularTier } = require('../lib/tier');
 
 const transporter = nodemailer.createTransport({
   service: 'gmail',
@@ -137,7 +138,7 @@ module.exports = async (req, res) => {
 
   try {
     if (req.method === 'POST') {
-      const { nome, email, telefone, profissao, q1, q2, q3, q4, q5, q6, q7, q8, q9, q10, q11, q12, q13, q14, q15, event_id, fbp, fbc, event_source_url } = req.body;
+      const { nome, email, telefone, profissao, q1, q2, q3, q4, q5, q6, q7, q8, q9, q10, q11, q12, q13, q14, q15, respostas_idx, event_id, fbp, fbc, event_source_url } = req.body;
 
       if (!nome || !email || !telefone) {
         return res.status(400).json({ error: 'Nome, email e telefone são obrigatórios' });
@@ -170,7 +171,8 @@ module.exports = async (req, res) => {
           telefone,
           profissao,
           responses: respostas,
-          ending_type: 'qualified'
+          ending_type: 'qualified',
+          tier: Array.isArray(respostas_idx) ? calcularTier('qualified', respostas_idx) : null
         })
       });
 
