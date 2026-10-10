@@ -1,27 +1,8 @@
 const { calcularTier } = require('../lib/tier');
+const { simularCaminho } = require('../lib/quiz');
+const { supabase, senhaDashboardValida, hashDoIp, excedeLimite } = require('../lib/seguranca');
 
-const ENDINGS = ['qualified', 'young', 'highExpectation', 'notQualified'];
-
-function supabase(path, options = {}) {
-  const base = (process.env.SUPABASE_URL || '').replace(/\/(rest\/v1)?\/?$/, '');
-  return fetch(`${base}/rest/v1/${path}`, {
-    ...options,
-    headers: {
-      apikey: process.env.SUPABASE_SERVICE_KEY,
-      Authorization: `Bearer ${process.env.SUPABASE_SERVICE_KEY}`,
-      'Content-Type': 'application/json',
-      ...options.headers
-    }
-  });
-}
-
-function respostasValidas(idx) {
-  return (
-    Array.isArray(idx) &&
-    idx.length === 15 &&
-    idx.every((v) => v === null || (Number.isInteger(v) && v >= 0 && v <= 9))
-  );
-}
+const LIMITE_RESPOSTAS_POR_HORA = Number(process.env.LIMITE_RESPOSTAS_HORA) || 60;
 
 module.exports = async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -34,10 +15,18 @@ module.exports = async (req, res) => {
 
   try {
     if (req.method === 'POST') {
-      const { ending_type, respostas_idx } = req.body || {};
+      const { ending_type, respostas_idx } = req.body && typeof req.body === 'object' ? req.body : {};
 
-      if (!ENDINGS.includes(ending_type) || !respostasValidas(respostas_idx)) {
+      const caminho = simularCaminho(respostas_idx);
+      if (!caminho.valido || caminho.ending !== ending_type) {
+        console.warn('⛔ Resposta recusada: caminho inconsistente');
         return res.status(400).json({ error: 'Dados inválidos' });
+      }
+
+      const ipHash = hashDoIp(req);
+      if (await excedeLimite('quiz_responses', ipHash, LIMITE_RESPOSTAS_POR_HORA, 60)) {
+        console.warn('⛔ Resposta recusada: limite de envios por hora');
+        return res.status(429).json({ error: 'Muitas tentativas. Tente novamente mais tarde.' });
       }
 
       const insert = await supabase('quiz_responses', {
@@ -45,7 +34,8 @@ module.exports = async (req, res) => {
         body: JSON.stringify({
           ending_type,
           tier: calcularTier(ending_type, respostas_idx),
-          answers: respostas_idx
+          answers: respostas_idx,
+          ip_hash: ipHash
         })
       });
 
@@ -58,10 +48,7 @@ module.exports = async (req, res) => {
     }
 
     if (req.method === 'GET') {
-      if (
-        !process.env.DASHBOARD_PASSWORD ||
-        req.headers['x-dashboard-password'] !== process.env.DASHBOARD_PASSWORD
-      ) {
+      if (!senhaDashboardValida(req)) {
         return res.status(401).json({ error: 'Não autorizado' });
       }
 

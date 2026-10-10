@@ -1,5 +1,8 @@
 const nodemailer = require('nodemailer');
 const { calcularTier } = require('../lib/tier');
+const { simularCaminho, textosDasRespostas } = require('../lib/quiz');
+const { validarContato, sinaisMeta } = require('../lib/validacao');
+const { supabase, senhaDashboardValida, hashDoIp, excedeLimite, leadRepetido } = require('../lib/seguranca');
 
 const transporter = nodemailer.createTransport({
   service: 'gmail',
@@ -81,19 +84,6 @@ async function enviarMetaCapi({ lead, nome, email, telefone, eventId, fbp, fbc, 
   }
 }
 
-function supabase(path, options = {}) {
-  const base = (process.env.SUPABASE_URL || '').replace(/\/(rest\/v1)?\/?$/, '');
-  return fetch(`${base}/rest/v1/${path}`, {
-    ...options,
-    headers: {
-      apikey: process.env.SUPABASE_SERVICE_KEY,
-      Authorization: `Bearer ${process.env.SUPABASE_SERVICE_KEY}`,
-      'Content-Type': 'application/json',
-      ...options.headers
-    }
-  });
-}
-
 async function enviarEmail(dados) {
   try {
     const mensagem = `
@@ -127,6 +117,13 @@ Dashboard: https://dashboard-deploy-zeta-drab.vercel.app
   }
 }
 
+const LIMITE_LEADS_POR_HORA = Number(process.env.LIMITE_LEADS_HORA) || 10;
+
+function recusar(res, status, motivo) {
+  console.warn(`⛔ Lead recusado: ${motivo}`);
+  return res.status(status).json({ error: 'Dados inválidos' });
+}
+
 module.exports = async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -138,29 +135,30 @@ module.exports = async (req, res) => {
 
   try {
     if (req.method === 'POST') {
-      const { nome, email, telefone, profissao, q1, q2, q3, q4, q5, q6, q7, q8, q9, q10, q11, q12, q13, q14, q15, respostas_idx, event_id, fbp, fbc, event_source_url } = req.body;
+      const body = req.body && typeof req.body === 'object' ? req.body : {};
 
-      if (!nome || !email || !telefone) {
-        return res.status(400).json({ error: 'Nome, email e telefone são obrigatórios' });
+      const caminho = simularCaminho(body.respostas_idx);
+      if (!caminho.valido) return recusar(res, 400, 'respostas fora de um caminho possível');
+      if (caminho.ending !== 'qualified') return recusar(res, 400, 'caminho não termina em qualificado');
+
+      const contato = validarContato(body);
+      if (!contato.ok) return recusar(res, 400, `campo inválido: ${contato.motivo}`);
+      const { nome, email, telefone, profissao } = contato.dados;
+
+      const ipHash = hashDoIp(req);
+      if (await excedeLimite('leads', ipHash, LIMITE_LEADS_POR_HORA, 60)) {
+        console.warn('⛔ Lead recusado: limite de envios por hora');
+        return res.status(429).json({ error: 'Muitas tentativas. Tente novamente mais tarde.' });
       }
 
-      const respostas = `
-1. ${q1 || '-'}
-2. ${q2 || '-'}
-3. ${q3 || '-'}
-4. ${q4 || '-'}
-5. ${q5 || '-'}
-6. ${q6 || '-'}
-7. ${q7 || '-'}
-8. ${q8 || '-'}
-9. ${q9 || '-'}
-10. ${q10 || '-'}
-11. ${q11 || '-'}
-12. ${q12 || '-'}
-13. ${q13 || '-'}
-14. ${q14 || '-'}
-15. ${q15 || '-'}
-      `.trim();
+      if (await leadRepetido(email, telefone)) {
+        console.log('↩️ Lead repetido nas últimas 24h: ignorado');
+        return res.json({ success: true, duplicate: true });
+      }
+
+      const respostas = textosDasRespostas(body.respostas_idx)
+        .map((texto, i) => `${i + 1}. ${texto || '-'}`)
+        .join('\n');
 
       const insert = await supabase('leads', {
         method: 'POST',
@@ -172,7 +170,8 @@ module.exports = async (req, res) => {
           profissao,
           responses: respostas,
           ending_type: 'qualified',
-          tier: Array.isArray(respostas_idx) ? calcularTier('qualified', respostas_idx) : null
+          tier: calcularTier('qualified', body.respostas_idx),
+          ip_hash: ipHash
         })
       });
 
@@ -184,6 +183,7 @@ module.exports = async (req, res) => {
       const [lead] = await insert.json();
       console.log(`✅ Lead salvo: ${nome}`);
 
+      const sinais = sinaisMeta(body);
       await Promise.allSettled([
         enviarEmail({ nome, email, telefone, profissao, respostas }),
         enviarMetaCapi({
@@ -191,10 +191,10 @@ module.exports = async (req, res) => {
           nome,
           email,
           telefone,
-          eventId: event_id,
-          fbp,
-          fbc,
-          sourceUrl: event_source_url
+          eventId: sinais.eventId,
+          fbp: sinais.fbp,
+          fbc: sinais.fbc,
+          sourceUrl: sinais.sourceUrl
         }, req)
       ]);
 
@@ -206,10 +206,7 @@ module.exports = async (req, res) => {
     }
 
     if (req.method === 'GET') {
-      if (
-        !process.env.DASHBOARD_PASSWORD ||
-        req.headers['x-dashboard-password'] !== process.env.DASHBOARD_PASSWORD
-      ) {
+      if (!senhaDashboardValida(req)) {
         return res.status(401).json({ error: 'Não autorizado' });
       }
 
@@ -218,7 +215,8 @@ module.exports = async (req, res) => {
         console.error('Erro ao listar leads:', list.status, await list.text());
         return res.status(500).json({ error: 'Erro ao buscar leads' });
       }
-      return res.json(await list.json());
+      const leads = await list.json();
+      return res.json(leads.map(({ ip_hash, ...resto }) => resto));
     }
 
     return res.status(405).json({ error: 'Método não permitido' });

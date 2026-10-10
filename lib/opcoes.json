@@ -1,0 +1,105 @@
+[
+  [
+    "menos de 18",
+    "18 a 25",
+    "26 a 35",
+    "36 a 45",
+    "46 a 55",
+    "56 a 65",
+    "mais que 65"
+  ],
+  [
+    "Ainda não invisto / Estou dando os primeiros passos",
+    "Invisto apenas em renda fixa (Poupança, Tesouro Direto, CDBs)",
+    "Invisto apenas em renda variável (ex: Ações, Cripto, Fundos e outros)",
+    "Invisto apenas em imóveis",
+    "Invisto em imóveis e em outros",
+    "Tenho uma carteira muito diversificada"
+  ],
+  [
+    "já investi em 1 a 3 imóveis, com menos de R$300mil",
+    "já investi em 3 ou mais imóveis, com menos de R$300mil",
+    "já investi em 1 a 3 imóveis, com mais de R$300mil",
+    "já investi em 3 ou mais imóveis, com mais de R$300mil",
+    "Nunca investi em imóveis de leilão, invisto em imóveis para aluguel",
+    "Nunca investi em leilão, mas já invisto em imóveis para revenda"
+  ],
+  [
+    "Arrematei apenas individualmente, nao sei como funciona investimento em cotas",
+    "Arrematei apenas individualmente, mas sei como funciona investimento em cotas",
+    "Nunca arrematei individualmente, mas já investi em 1 a 3 cotas",
+    "Nunca arrematei individualmente, mas já investi em 3 ou mais cotas",
+    "Já arrematei individualmente e já investi em cotas"
+  ],
+  [
+    "Sim, um assessor fez grande parte do trabalho",
+    "Sim, um assessor fez uma parte do trabalho",
+    "Sim, mas eu fiz a maior parte do trabalho",
+    "Não contei com ajuda de nenhum assessor"
+  ],
+  [
+    "menos que 15%",
+    "de 15 a 25%",
+    "de 20 a 30%",
+    "de 30 a 40%",
+    "de 40 a 50%",
+    "mais que 50%",
+    "ainda nao vendi nenhum"
+  ],
+  [
+    "menos de 9 meses",
+    "de 9 a 12 meses",
+    "de 12 a 18 meses",
+    "18 a 24 meses",
+    "mais de 24 meses"
+  ],
+  [
+    "menos de R$20mil",
+    "de R$20mil a R$50mil",
+    "de R$50mil a R$150mil",
+    "de R$150mil a R$300mil",
+    "de R$300mil a R$500mil",
+    "mais de R$500mil"
+  ],
+  [
+    "Ainda sei pouco",
+    "Já estudei bastante",
+    "Já estudei e participo de grupos de leilão"
+  ],
+  [
+    "Não sei nada",
+    "Sei muito pouco",
+    "Sei razoavelmente",
+    "Entendo bem, embora não tenha experiência na prática"
+  ],
+  [
+    "menos de R$20mil",
+    "de R$20mil a R$50mil",
+    "de R$50mil a R$150mil",
+    "de R$150mil a R$300mil",
+    "de R$300mil a R$500mil",
+    "mais de R$500mil"
+  ],
+  [
+    "Gostaria de ter cotas de vários imóveis e não quero ter nenhum trabalho até a venda",
+    "Gostaria de arrematar um imóvel sozinho (sem cotizar) e nao quero ter nenhum trabalho até a venda",
+    "Gostaria de arrematar um imóvel sozinho (sem cotizar) e quero fazer a reforma e a venda por minha conta"
+  ],
+  [
+    "Acho ruim, não investiria",
+    "Acho satisfatório e consideraria investir",
+    "Acho ótimo e investiria",
+    "Não sei"
+  ],
+  [
+    "Abaixo de 30% já desistiria",
+    "Abaixo de 35% já desistiria",
+    "Abaixo de 40% já desistiria",
+    "Abaixo de 45% já desistiria"
+  ],
+  [
+    "menos de 1 ano",
+    "de 1 a 2 anos",
+    "mais de 2 anos"
+  ]
+]
